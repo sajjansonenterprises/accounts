@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { format } from 'date-fns';
-import { Transaction, TransactionFilter } from '../types';
+import { Transaction, TransactionFilter, TransactionType } from '../types';
 
 interface TransactionListProps {
   transactions: Transaction[];
@@ -86,7 +86,7 @@ const TransactionList: React.FC<TransactionListProps> = ({ transactions, onDelet
               <select
                 className="w-full p-2 border rounded-md text-sm"
                 value={filters.type || ''}
-                onChange={(e) => setFilters({...filters, type: e.target.value as any || undefined})}
+                onChange={(e) => setFilters({...filters, type: e.target.value as '' | TransactionType || undefined})}
               >
                 <option value="">All Types</option>
                 <option value="expense">Expense</option>
