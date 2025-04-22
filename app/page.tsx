@@ -4,12 +4,14 @@ import { useState, useEffect } from 'react';
 import TransactionForm from './components/TransactionForm';
 import TransactionList from './components/TransactionList';
 import StatementGenerator from './components/StatementGenerator';
+import CategoryManager from './components/CategoryManager';
 import { Transaction } from './types';
-import { getTransactions, saveTransaction, deleteTransaction } from './utils/storage';
+import { getTransactions, saveTransaction, deleteTransaction, updateTransaction } from './utils/storage';
 
 export default function Home() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [activeTab, setActiveTab] = useState<'transactions' | 'reports'>('transactions');
+  const [activeTab, setActiveTab] = useState<'transactions' | 'reports' | 'categories'>('transactions');
+  const [transactionToEdit, setTransactionToEdit] = useState<Transaction | null>(null);
 
   // Load transactions from localStorage on component mount
   useEffect(() => {
@@ -22,9 +24,37 @@ export default function Home() {
     setTransactions([...transactions, transaction]);
   };
 
+  const handleUpdateTransaction = (updatedTransaction: Transaction) => {
+    updateTransaction(updatedTransaction);
+    setTransactions(transactions.map(t => 
+      t.id === updatedTransaction.id ? updatedTransaction : t
+    ));
+    setTransactionToEdit(null);
+  };
+
+  const handleEditTransaction = (transaction: Transaction) => {
+    setTransactionToEdit(transaction);
+    // Scroll to the form
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleCancelEdit = () => {
+    setTransactionToEdit(null);
+  };
+
   const handleDeleteTransaction = (id: string) => {
     deleteTransaction(id);
     setTransactions(transactions.filter(t => t.id !== id));
+    // If the transaction being edited is deleted, clear the edit state
+    if (transactionToEdit && transactionToEdit.id === id) {
+      setTransactionToEdit(null);
+    }
+  };
+
+  // Handle category update - refresh form if needed
+  const handleCategoryUpdate = () => {
+    // This will force the TransactionForm to reload categories
+    setTransactionToEdit(null);
   };
 
   return (
@@ -59,16 +89,41 @@ export default function Home() {
             >
               Reports & Statements
             </button>
+            <button
+              onClick={() => setActiveTab('categories')}
+              className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                activeTab === 'categories'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              Categories
+            </button>
           </nav>
         </div>
 
-        {activeTab === 'transactions' ? (
+        {activeTab === 'transactions' && (
           <div className="space-y-8">
-            <TransactionForm onAddTransaction={handleAddTransaction} />
-            <TransactionList transactions={transactions} onDelete={handleDeleteTransaction} />
+            <TransactionForm 
+              onAddTransaction={handleAddTransaction} 
+              onUpdateTransaction={handleUpdateTransaction}
+              transactionToEdit={transactionToEdit}
+              onCancelEdit={handleCancelEdit}
+            />
+            <TransactionList 
+              transactions={transactions} 
+              onDelete={handleDeleteTransaction} 
+              onEdit={handleEditTransaction}
+            />
           </div>
-        ) : (
+        )}
+
+        {activeTab === 'reports' && (
           <StatementGenerator />
+        )}
+
+        {activeTab === 'categories' && (
+          <CategoryManager onCategoryUpdate={handleCategoryUpdate} />
         )}
       </div>
 

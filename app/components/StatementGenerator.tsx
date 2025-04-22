@@ -1,18 +1,70 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { format } from 'date-fns';
-import { Transaction, DateFilter } from '../types';
-import { getTransactionsByDateRange } from '../utils/storage';
+import { Transaction, DateFilter, TransactionFilter } from '../types';
+import { getTransactionsByDateRange, getCategories } from '../utils/storage';
 
 const StatementGenerator: React.FC = () => {
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [filteredTransactions, setFilteredTransactions] = useState<Transaction[]>([]);
   const [isGeneratingStatement, setIsGeneratingStatement] = useState(false);
+  const [filters, setFilters] = useState<TransactionFilter>({});
+  const [categories, setCategories] = useState<string[]>([]);
   const { register, handleSubmit, formState: { errors } } = useForm<DateFilter>();
 
+  // Load categories
+  useEffect(() => {
+    setCategories(getCategories());
+  }, []);
+
+  // Get unique payees for filter dropdown
+  const payees = useMemo(() => {
+    if (transactions.length === 0) return [];
+    return [...new Set(transactions.map(t => t.payee))];
+  }, [transactions]);
+
   const onSubmit = (data: DateFilter) => {
-    const transactions = getTransactionsByDateRange(data.startDate, data.endDate);
-    setFilteredTransactions(transactions);
+    const fetchedTransactions = getTransactionsByDateRange(data.startDate, data.endDate);
+    setTransactions(fetchedTransactions);
+    applyFilters(fetchedTransactions, filters);
     setIsGeneratingStatement(true);
+  };
+
+  // Apply filters to transactions
+  const applyFilters = (transactionsToFilter: Transaction[], currentFilters: TransactionFilter) => {
+    const filtered = transactionsToFilter.filter(transaction => {
+      // Filter by type
+      if (currentFilters.type && transaction.type !== currentFilters.type) {
+        return false;
+      }
+      
+      // Filter by category
+      if (currentFilters.category && transaction.category !== currentFilters.category) {
+        return false;
+      }
+      
+      // Filter by payee
+      if (currentFilters.payee && transaction.payee !== currentFilters.payee) {
+        return false;
+      }
+      
+      return true;
+    });
+    
+    setFilteredTransactions(filtered);
+  };
+
+  // Update filters and apply them
+  const handleFilterChange = (key: keyof TransactionFilter, value: string) => {
+    const newFilters = { ...filters, [key]: value || undefined };
+    setFilters(newFilters);
+    applyFilters(transactions, newFilters);
+  };
+
+  // Reset all report filters
+  const resetFilters = () => {
+    setFilters({});
+    setFilteredTransactions(transactions);
   };
 
   // Calculate totals
@@ -76,6 +128,62 @@ const StatementGenerator: React.FC = () => {
             </div>
           </div>
 
+          {/* Filters for the report */}
+          <div className="bg-gray-50 p-4 rounded-lg mb-4 print:hidden">
+            <h4 className="font-medium mb-2">Filter Results</h4>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div>
+                <label className="block text-sm text-gray-700 mb-1">Type</label>
+                <select
+                  className="w-full p-2 border rounded-md text-sm"
+                  value={filters.type || ''}
+                  onChange={(e) => handleFilterChange('type', e.target.value)}
+                >
+                  <option value="">All Types</option>
+                  <option value="expense">Expense</option>
+                  <option value="income">Income</option>
+                </select>
+              </div>
+              
+              <div>
+                <label className="block text-sm text-gray-700 mb-1">Category</label>
+                <select
+                  className="w-full p-2 border rounded-md text-sm"
+                  value={filters.category || ''}
+                  onChange={(e) => handleFilterChange('category', e.target.value)}
+                >
+                  <option value="">All Categories</option>
+                  {categories.map(category => (
+                    <option key={category} value={category}>{category}</option>
+                  ))}
+                </select>
+              </div>
+              
+              <div>
+                <label className="block text-sm text-gray-700 mb-1">Person</label>
+                <select
+                  className="w-full p-2 border rounded-md text-sm"
+                  value={filters.payee || ''}
+                  onChange={(e) => handleFilterChange('payee', e.target.value)}
+                >
+                  <option value="">All People</option>
+                  {payees.map(payee => (
+                    <option key={payee} value={payee}>{payee}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            
+            <div className="mt-3 flex justify-end">
+              <button
+                onClick={resetFilters}
+                className="bg-gray-200 text-gray-800 px-3 py-1 rounded-md hover:bg-gray-300 text-sm"
+              >
+                Reset Filters
+              </button>
+            </div>
+          </div>
+
           {/* Print-only header */}
           <div className="hidden print:block mb-4">
             <h3 className="text-xl font-semibold text-center">Financial Statement</h3>
@@ -88,7 +196,7 @@ const StatementGenerator: React.FC = () => {
           </div>
 
           {filteredTransactions.length === 0 ? (
-            <p className="text-gray-500 text-center py-4">No transactions found for the selected date range</p>
+            <p className="text-gray-500 text-center py-4">No transactions found for the selected criteria</p>
           ) : (
             <div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 print:grid-cols-3 print:gap-2">
@@ -106,6 +214,16 @@ const StatementGenerator: React.FC = () => {
                     ${balance.toFixed(2)}
                   </p>
                 </div>
+              </div>
+
+              {/* Filter summary for print */}
+              <div className="hidden print:block mb-4 text-sm">
+                <p>
+                  <strong>Filters:</strong> 
+                  {filters.type ? ` Type: ${filters.type}` : ' All Types'} | 
+                  {filters.category ? ` Category: ${filters.category}` : ' All Categories'} | 
+                  {filters.payee ? ` Person: ${filters.payee}` : ' All People'}
+                </p>
               </div>
 
               {/* Mobile-friendly table */}
@@ -182,6 +300,10 @@ const StatementGenerator: React.FC = () => {
                     </tbody>
                   </table>
                 </div>
+              </div>
+              
+              <div className="mt-4 text-sm text-gray-500 print:hidden">
+                Showing {filteredTransactions.length} of {transactions.length} transactions
               </div>
             </div>
           )}

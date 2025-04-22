@@ -16,4 +16,13 @@ export interface Transaction {
 export interface DateFilter {
   startDate: string;
   endDate: string;
+}
+
+// Filter options for transaction list
+export interface TransactionFilter {
+  type?: TransactionType;
+  category?: string;
+  payee?: string;
+  startDate?: string;
+  endDate?: string;
 } 
